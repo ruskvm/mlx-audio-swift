@@ -28,7 +28,9 @@ public final class ESpeakNGEngine {
     public init() throws {
         #if !targetEnvironment(simulator)
         if let bundleURLStr = findDataBundlePath() {
-            let initOK = espeak_Initialize(AUDIO_OUTPUT_PLAYBACK, 0, bundleURLStr, 0)
+            // Pass espeakINITIALIZE_DONT_EXIT (0x8000) to prevent espeak-ng from
+            // calling exit(1) on initialization failure, which would kill the iOS app.
+            let initOK = espeak_Initialize(AUDIO_OUTPUT_PLAYBACK, 0, bundleURLStr, 0x8000)
 
             if initOK != Constants.successAudioSampleRate {
                 print("Internal espeak-ng error, could not initialize")

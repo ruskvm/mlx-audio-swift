@@ -25,6 +25,7 @@ public class Kokoro: @unchecked Sendable {
         case modelNotInitialized
         case chineseG2PNotInitialized
         case voiceNotLoaded
+        case missingWeightKeys([String])
     }
 
     // Model components
@@ -141,6 +142,22 @@ public class Kokoro: @unchecked Sendable {
 
             guard !sanitizedWeights.isEmpty else {
                 throw KokoroError.modelNotInitialized
+            }
+
+            // Validate critical top-level weight keys before force-unwrapping
+            let requiredKeys = [
+                "bert_encoder.weight", "bert_encoder.bias",
+                "predictor.lstm.weight_ih_l0", "predictor.lstm.weight_hh_l0",
+                "predictor.lstm.bias_ih_l0", "predictor.lstm.bias_hh_l0",
+                "predictor.lstm.weight_ih_l0_reverse", "predictor.lstm.weight_hh_l0_reverse",
+                "predictor.lstm.bias_ih_l0_reverse", "predictor.lstm.bias_hh_l0_reverse",
+                "predictor.duration_proj.linear_layer.weight", "predictor.duration_proj.linear_layer.bias",
+            ]
+            let missingKeys = requiredKeys.filter { sanitizedWeights[$0] == nil }
+            if !missingKeys.isEmpty {
+                print("[Kokoro] Missing weight keys: \(missingKeys)")
+                print("[Kokoro] Available keys (\(sanitizedWeights.count)): \(Array(sanitizedWeights.keys).sorted().prefix(20))...")
+                throw KokoroError.missingWeightKeys(missingKeys)
             }
 
             bert = CustomAlbert(weights: sanitizedWeights, config: config.albertConfig)
