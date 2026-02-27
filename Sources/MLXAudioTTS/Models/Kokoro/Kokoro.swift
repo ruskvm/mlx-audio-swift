@@ -93,12 +93,13 @@ public class Kokoro: @unchecked Sendable {
         try ensureModelInitialized()
         print("[Kokoro] espeak-ng initialized, weights loaded.")
 
-        // Pre-load the default voice to verify voice files are accessible
+        // Pre-load the default voice and set language
         let defaultVoice: KokoroVoice = .afHeart
         self.voice = try VoiceLoader.loadVoice(defaultVoice, repoDirectory: repoDirectory)
         self.voice?.eval()
+        try kokoroTokenizer.setLanguage(for: defaultVoice)
         self.chosenVoice = defaultVoice
-        print("[Kokoro] Default voice loaded. Warm-up complete.")
+        print("[Kokoro] Default voice loaded, language set. Warm-up complete.")
     }
 
     /// Reset the model to free up memory
@@ -236,15 +237,21 @@ public class Kokoro: @unchecked Sendable {
             }
 
             do {
+                print("[Kokoro] Phonemizing text: \(text.prefix(80))...")
                 let phonemizedResult = try kokoroTokenizer.phonemize(text)
+                print("[Kokoro] Phonemized: \(phonemizedResult.phonemes.prefix(80))")
                 let inputIds = PhonemeTokenizer.tokenize(phonemizedText: phonemizedResult.phonemes)
+                print("[Kokoro] Token count: \(inputIds.count)")
 
                 guard inputIds.count <= config.maxTokenCount else {
                     throw KokoroError.tooManyTokens
                 }
 
-                return try self.processTokensToAudio(inputIds: inputIds, speed: speed)
+                let audio = try self.processTokensToAudio(inputIds: inputIds, speed: speed)
+                print("[Kokoro] Audio generated, shape: \(audio.shape)")
+                return audio
             } catch {
+                print("[Kokoro] ERROR in generateAudioForSentence: \(error)")
                 var errorAudioData = [Float](repeating: 0.0, count: 4800)
                 for i in 0..<4800 {
                     let t = Float(i) / Float(config.sampleRate)

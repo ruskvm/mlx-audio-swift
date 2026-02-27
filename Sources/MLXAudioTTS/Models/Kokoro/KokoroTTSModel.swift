@@ -101,29 +101,29 @@ public final class KokoroTTSModel: SpeechGenerationModel {
             }
         }
 
-        // If language is specified, pick a default voice for that language
+        // If language is specified, pick a default voice for that language.
+        // Only map languages that Kokoro-82M actually supports.
+        // Unsupported languages (de, ko, etc.) fall through to English default.
         if let lang = language?.lowercased() {
             switch lang {
-            case "de", "german", "deutsch":
-                return .efDora  // European Female (closest to German)
             case "ja", "japanese":
                 return .jfAlpha
-            case "zh", "chinese", "mandarin":
+            case "zh", "zh-hans", "zh-hant", "chinese", "mandarin":
                 return .zfXiaobei
             case "fr", "french":
                 return .ffSiwis
-            case "ko", "korean":
-                return .hfAlpha
             case "hi", "hindi":
                 return .hfAlpha
-            case "pt", "portuguese":
+            case "pt", "pt-br", "portuguese":
                 return .pfDora
             case "it", "italian":
                 return .ifSara
+            case "es", "spanish":
+                return .efDora
             case "en-gb", "british":
                 return .bfAlice
             default:
-                break
+                break  // Unsupported languages use English voice
             }
         }
 
