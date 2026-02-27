@@ -45,15 +45,19 @@ public class Kokoro: @unchecked Sendable {
     private var isModelInitialized = false
     private var customURL: URL?
 
+    /// Directory containing downloaded model files (voices, lexicons, etc.)
+    public var repoDirectory: URL?
+
     public let config: KokoroConfiguration
 
     /// Callback type for streaming audio generation
     public typealias AudioChunkCallback = @Sendable (MLXArray) -> Void
 
     /// Initializes with default configuration and optional custom model URL
-    public init(config: KokoroConfiguration = KokoroConfiguration(), customURL: URL? = nil) {
+    public init(config: KokoroConfiguration = KokoroConfiguration(), customURL: URL? = nil, repoDirectory: URL? = nil) {
         self.config = config
         self.customURL = customURL
+        self.repoDirectory = repoDirectory
     }
 
     /// Download Kokoro model from HuggingFace and initialize
@@ -64,9 +68,10 @@ public class Kokoro: @unchecked Sendable {
         print("[Kokoro] Downloading model from \(repoId)...")
 
         let repo = Hub.Repo(id: repoId)
+        // Download safetensors weights and all JSON files (voices, lexicons, config)
         let snapshotURL = try await HubApi.shared.snapshot(
             from: repo,
-            matching: ["*.safetensors"],
+            matching: ["*.safetensors", "voices/*.json", "*.json"],
             progressHandler: progressHandler ?? { _ in }
         )
 
@@ -77,7 +82,7 @@ public class Kokoro: @unchecked Sendable {
 
         print("[Kokoro] Model downloaded to \(modelURL.path)")
 
-        return Kokoro(customURL: modelURL)
+        return Kokoro(customURL: modelURL, repoDirectory: snapshotURL)
     }
 
     /// Reset the model to free up memory
@@ -113,7 +118,7 @@ public class Kokoro: @unchecked Sendable {
         }
 
         if kokoroTokenizer == nil {
-            kokoroTokenizer = KokoroTokenizer(engine: eSpeakEngine)
+            kokoroTokenizer = KokoroTokenizer(engine: eSpeakEngine, repoDirectory: repoDirectory)
         }
 
         autoreleasepool {
@@ -184,7 +189,7 @@ public class Kokoro: @unchecked Sendable {
         return try autoreleasepool { () -> MLXArray in
             if chosenVoice != voice {
                 autoreleasepool {
-                    self.voice = VoiceLoader.loadVoice(voice)
+                    self.voice = VoiceLoader.loadVoice(voice, repoDirectory: self.repoDirectory)
                     self.voice?.eval()
                 }
 
@@ -753,10 +758,30 @@ class VoiceLoader {
         Array(KokoroVoice.allCases)
     }
 
-    static func loadVoice(_ voice: KokoroVoice) -> MLXArray {
+    static func loadVoice(_ voice: KokoroVoice, repoDirectory: URL? = nil) -> MLXArray {
         let file = voice.fileName
-        let filePath = Bundle.module.path(forResource: file, ofType: "json")!
-        return try! read3DArrayFromJson(file: filePath, shape: [510, 1, 256])!
+
+        // Look for voice file in repo directory (downloaded from HuggingFace)
+        var filePath: String?
+        if let repoDir = repoDirectory {
+            // Try voices/ subdirectory first
+            let voicesPath = repoDir.appendingPathComponent("voices/\(file).json").path
+            if FileManager.default.fileExists(atPath: voicesPath) {
+                filePath = voicesPath
+            } else {
+                // Try root directory
+                let rootPath = repoDir.appendingPathComponent("\(file).json").path
+                if FileManager.default.fileExists(atPath: rootPath) {
+                    filePath = rootPath
+                }
+            }
+        }
+
+        guard let resolvedPath = filePath else {
+            fatalError("[Kokoro] Voice file '\(file).json' not found. Ensure model was downloaded with fromHub().")
+        }
+
+        return try! read3DArrayFromJson(file: resolvedPath, shape: [510, 1, 256])!
     }
 
     private static func read3DArrayFromJson(file: String, shape: [Int]) throws -> MLXArray? {
@@ -801,11 +826,11 @@ class VoiceLoader {
 class KokoroWeightLoader {
     private init() {}
 
-    static func loadWeights(url: URL? = nil) -> [String: MLXArray] {
-        let modelURL = url ?? {
-            let filePath = Bundle.module.path(forResource: "kokoro-v1_0", ofType: "safetensors")!
-            return URL(fileURLWithPath: filePath)
-        }()
+    static func loadWeights(url: URL?) -> [String: MLXArray] {
+        guard let modelURL = url else {
+            print("[Kokoro] Error: No model URL provided. Ensure model was downloaded with fromHub().")
+            return [:]
+        }
 
         do {
             let weights = try MLX.loadArrays(url: modelURL)

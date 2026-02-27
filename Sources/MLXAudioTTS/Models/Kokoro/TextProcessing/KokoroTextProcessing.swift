@@ -570,6 +570,7 @@ public final class KokoroTokenizer {
     private var eSpeakEngine: ESpeakNGEngine
     private var currentLanguage: LanguageDialect = .none
     private var isLexiconEnabled = false
+    private var repoDirectory: URL?
 
     public struct Token {
         public let text: String
@@ -607,8 +608,9 @@ public final class KokoroTokenizer {
         public let tokens: [Token]
     }
 
-    public init(engine: ESpeakNGEngine) {
+    public init(engine: ESpeakNGEngine, repoDirectory: URL? = nil) {
         self.eSpeakEngine = engine
+        self.repoDirectory = repoDirectory
         loadLexicon()
     }
 
@@ -655,10 +657,20 @@ public final class KokoroTokenizer {
     }
 
     private func loadLexiconFile(_ filename: String) -> [String: String]? {
-        guard let url = Bundle.module.url(forResource: filename, withExtension: "json"),
+        // Look for lexicon file in repo directory (downloaded from HuggingFace)
+        var fileURL: URL?
+        if let repoDir = repoDirectory {
+            let path = repoDir.appendingPathComponent("\(filename).json")
+            if FileManager.default.fileExists(atPath: path.path) {
+                fileURL = path
+            }
+        }
+
+        guard let url = fileURL,
               let data = try? Data(contentsOf: url),
               let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any]
         else {
+            // Lexicons are optional — pronunciation still works without them
             return nil
         }
 

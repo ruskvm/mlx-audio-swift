@@ -68,9 +68,7 @@ public final class KokoroTTSModel: SpeechGenerationModel {
         return AsyncThrowingStream { continuation in
             Task { @Sendable in
                 do {
-                    var chunks: [MLXArray] = []
                     try kokoro.generateAudio(voice: resolvedVoice, text: text, speed: 1.0) { chunk in
-                        chunks.append(chunk)
                         continuation.yield(.audio(chunk))
                     }
                     continuation.finish()
