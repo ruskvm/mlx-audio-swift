@@ -30,6 +30,9 @@ public final class KokoroTTSModel: SpeechGenerationModel {
             repoId: modelRepo,
             progressHandler: progressHandler
         )
+        // Eagerly initialize espeak-ng, model weights, and default voice
+        // so failures happen here (caught by loadModel) instead of during speak
+        try kokoro.warmUp()
         return KokoroTTSModel(kokoro: kokoro)
     }
 

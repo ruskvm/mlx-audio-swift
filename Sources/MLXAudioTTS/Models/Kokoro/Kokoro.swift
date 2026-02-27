@@ -85,6 +85,21 @@ public class Kokoro: @unchecked Sendable {
         return Kokoro(customURL: modelURL, repoDirectory: snapshotURL)
     }
 
+    /// Eagerly initialize all components (espeak-ng, weights, default voice)
+    /// Call this during model loading so failures are caught early.
+    public func warmUp() throws {
+        print("[Kokoro] Warming up: initializing espeak-ng and loading weights...")
+        try ensureModelInitialized()
+        print("[Kokoro] espeak-ng initialized, weights loaded.")
+
+        // Pre-load the default voice to verify voice files are accessible
+        let defaultVoice: KokoroVoice = .afHeart
+        self.voice = try VoiceLoader.loadVoice(defaultVoice, repoDirectory: repoDirectory)
+        self.voice?.eval()
+        self.chosenVoice = defaultVoice
+        print("[Kokoro] Default voice loaded. Warm-up complete.")
+    }
+
     /// Reset the model to free up memory
     public func resetModel(preserveTextProcessing: Bool = true) {
         bert = nil
