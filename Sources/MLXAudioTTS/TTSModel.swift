@@ -59,6 +59,8 @@ public enum TTS {
             return try await MarvisTTSModel.fromPretrained(modelRepo, cache: cache)
         case "soprano_tts", "soprano":
             return try await SopranoModel.fromPretrained(modelRepo, cache: cache)
+        case "kokoro", "kokoro_tts":
+            return try await KokoroTTSModel.fromPretrained(modelRepo)
         case "pocket_tts":
             return try await PocketTTSModel.fromPretrained(modelRepo, cache: cache)
         default:
@@ -80,6 +82,9 @@ public enum TTS {
         }
         if lower.contains("qwen3") || lower.contains("qwen") {
             return "qwen3"
+        }
+        if lower.contains("kokoro") {
+            return "kokoro"
         }
         if lower.contains("soprano") {
             return "soprano"

@@ -53,7 +53,8 @@ let package = Package(
         .package(url: "https://github.com/ml-explore/mlx-swift.git", .upToNextMajor(from: "0.30.6")),
         .package(url: "https://github.com/ml-explore/mlx-swift-lm.git", .upToNextMajor(from: "2.30.3")),
         .package(url: "https://github.com/huggingface/swift-transformers.git", .upToNextMajor(from: "1.1.6")),
-        .package(url: "https://github.com/huggingface/swift-huggingface.git", .upToNextMajor(from: "0.6.0"))
+        .package(url: "https://github.com/huggingface/swift-huggingface.git", .upToNextMajor(from: "0.6.0")),
+        .package(url: "https://github.com/nicktmro/espeak-ng-spm.git", branch: "master"),
     ],
     targets: [
         // MARK: - MLXAudioCore
@@ -95,6 +96,7 @@ let package = Package(
                 .product(name: "MLXLLM", package: "mlx-swift-lm"),
                 .product(name: "HuggingFace", package: "swift-huggingface"),
                 .product(name: "Transformers", package: "swift-transformers"),
+                .product(name: "libespeak_ng", package: "espeak-ng-spm"),
             ],
             path: "Sources/MLXAudioTTS"
         ),
