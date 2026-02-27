@@ -68,10 +68,10 @@ public class Kokoro: @unchecked Sendable {
         print("[Kokoro] Downloading model from \(repoId)...")
 
         let repo = Hub.Repo(id: repoId)
-        // Download safetensors weights and all JSON files (voices, lexicons, config)
+        // Download safetensors weights, voice files, and lexicon/config JSONs
         let snapshotURL = try await HubApi.shared.snapshot(
             from: repo,
-            matching: ["*.safetensors", "voices/*.json", "*.json"],
+            matching: ["*.safetensors", "voices/*.safetensors", "*.json"],
             progressHandler: progressHandler ?? { _ in }
         )
 
@@ -761,27 +761,41 @@ class VoiceLoader {
     static func loadVoice(_ voice: KokoroVoice, repoDirectory: URL? = nil) -> MLXArray {
         let file = voice.fileName
 
-        // Look for voice file in repo directory (downloaded from HuggingFace)
-        var filePath: String?
-        if let repoDir = repoDirectory {
-            // Try voices/ subdirectory first
-            let voicesPath = repoDir.appendingPathComponent("voices/\(file).json").path
-            if FileManager.default.fileExists(atPath: voicesPath) {
-                filePath = voicesPath
-            } else {
-                // Try root directory
-                let rootPath = repoDir.appendingPathComponent("\(file).json").path
-                if FileManager.default.fileExists(atPath: rootPath) {
-                    filePath = rootPath
+        guard let repoDir = repoDirectory else {
+            fatalError("[Kokoro] No repoDirectory set. Ensure model was downloaded with fromHub().")
+        }
+
+        // Try safetensors format first (HuggingFace repo format)
+        let safetensorsPath = repoDir.appendingPathComponent("voices/\(file).safetensors")
+        if FileManager.default.fileExists(atPath: safetensorsPath.path) {
+            do {
+                let arrays = try MLX.loadArrays(url: safetensorsPath)
+                // Voice safetensors typically has a single array
+                if let voiceArray = arrays.values.first {
+                    return voiceArray
                 }
+            } catch {
+                print("[Kokoro] Failed to load safetensors voice \(file): \(error)")
             }
         }
 
-        guard let resolvedPath = filePath else {
-            fatalError("[Kokoro] Voice file '\(file).json' not found. Ensure model was downloaded with fromHub().")
+        // Fallback: try JSON format
+        let jsonPath = repoDir.appendingPathComponent("voices/\(file).json")
+        if FileManager.default.fileExists(atPath: jsonPath.path) {
+            if let arr = try? read3DArrayFromJson(file: jsonPath.path, shape: [510, 1, 256]) {
+                return arr
+            }
         }
 
-        return try! read3DArrayFromJson(file: resolvedPath, shape: [510, 1, 256])!
+        // Try root directory
+        let rootJson = repoDir.appendingPathComponent("\(file).json")
+        if FileManager.default.fileExists(atPath: rootJson.path) {
+            if let arr = try? read3DArrayFromJson(file: rootJson.path, shape: [510, 1, 256]) {
+                return arr
+            }
+        }
+
+        fatalError("[Kokoro] Voice file '\(file)' not found in \(repoDir.path). Ensure model was downloaded with fromHub().")
     }
 
     private static func read3DArrayFromJson(file: String, shape: [Int]) throws -> MLXArray? {
