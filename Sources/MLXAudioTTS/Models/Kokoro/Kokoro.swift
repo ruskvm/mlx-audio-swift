@@ -121,8 +121,12 @@ public class Kokoro: @unchecked Sendable {
             kokoroTokenizer = KokoroTokenizer(engine: eSpeakEngine, repoDirectory: repoDirectory)
         }
 
-        autoreleasepool {
+        try autoreleasepool {
             let sanitizedWeights = KokoroWeightLoader.loadWeights(url: self.customURL)
+
+            guard !sanitizedWeights.isEmpty else {
+                throw KokoroError.modelNotInitialized
+            }
 
             bert = CustomAlbert(weights: sanitizedWeights, config: config.albertConfig)
             bertEncoder = Linear(weight: sanitizedWeights["bert_encoder.weight"]!, bias: sanitizedWeights["bert_encoder.bias"]!)
@@ -188,8 +192,8 @@ public class Kokoro: @unchecked Sendable {
 
         return try autoreleasepool { () -> MLXArray in
             if chosenVoice != voice {
-                autoreleasepool {
-                    self.voice = VoiceLoader.loadVoice(voice, repoDirectory: self.repoDirectory)
+                try autoreleasepool {
+                    self.voice = try VoiceLoader.loadVoice(voice, repoDirectory: self.repoDirectory)
                     self.voice?.eval()
                 }
 
@@ -758,24 +762,21 @@ class VoiceLoader {
         Array(KokoroVoice.allCases)
     }
 
-    static func loadVoice(_ voice: KokoroVoice, repoDirectory: URL? = nil) -> MLXArray {
+    static func loadVoice(_ voice: KokoroVoice, repoDirectory: URL? = nil) throws -> MLXArray {
         let file = voice.fileName
 
         guard let repoDir = repoDirectory else {
-            fatalError("[Kokoro] No repoDirectory set. Ensure model was downloaded with fromHub().")
+            throw Kokoro.KokoroError.voiceNotLoaded
         }
 
         // Try safetensors format first (HuggingFace repo format)
         let safetensorsPath = repoDir.appendingPathComponent("voices/\(file).safetensors")
         if FileManager.default.fileExists(atPath: safetensorsPath.path) {
-            do {
-                let arrays = try MLX.loadArrays(url: safetensorsPath)
-                // Voice safetensors typically has a single array
-                if let voiceArray = arrays.values.first {
-                    return voiceArray
-                }
-            } catch {
-                print("[Kokoro] Failed to load safetensors voice \(file): \(error)")
+            let arrays = try MLX.loadArrays(url: safetensorsPath)
+            // Voice safetensors typically has a single array
+            if let voiceArray = arrays.values.first {
+                print("[Kokoro] Loaded voice \(file) from safetensors (shape: \(voiceArray.shape))")
+                return voiceArray
             }
         }
 
@@ -795,7 +796,8 @@ class VoiceLoader {
             }
         }
 
-        fatalError("[Kokoro] Voice file '\(file)' not found in \(repoDir.path). Ensure model was downloaded with fromHub().")
+        print("[Kokoro] Voice file '\(file)' not found in \(repoDir.path)")
+        throw Kokoro.KokoroError.voiceNotLoaded
     }
 
     private static func read3DArrayFromJson(file: String, shape: [Int]) throws -> MLXArray? {
@@ -818,7 +820,7 @@ class VoiceLoader {
                             aa[aaIndex] = Float(n)
                             aaIndex += 1
                         } else {
-                            fatalError("Cannot load value \(a), \(b), \(c) as double")
+                            return nil
                         }
                     }
                 }
@@ -828,7 +830,7 @@ class VoiceLoader {
         }
 
         guard aaIndex == shape[0] * shape[1] * shape[2] else {
-            fatalError("Mismatch in array size: \(aaIndex) vs \(shape[0] * shape[1] * shape[2])")
+            return nil
         }
 
         return MLXArray(aa).reshaped(shape)
