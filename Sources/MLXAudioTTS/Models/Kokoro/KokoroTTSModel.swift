@@ -3,6 +3,7 @@ import Hub
 import HuggingFace
 @preconcurrency import MLX
 import MLXAudioCore
+@preconcurrency import MLXLMCommon
 import MLXNN
 
 /// Wrapper that adapts Kokoro to the SpeechGenerationModel protocol
