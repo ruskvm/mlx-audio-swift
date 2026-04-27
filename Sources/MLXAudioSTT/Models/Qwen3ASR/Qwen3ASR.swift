@@ -1450,7 +1450,8 @@ public class Qwen3ASRModel: Module {
 
     public static func fromPretrained(
         _ modelPath: String,
-        cache: HubCache = .default
+        cache: HubCache = .default,
+        progressHandler: (@MainActor @Sendable (Progress) -> Void)? = nil
     ) async throws -> Qwen3ASRModel {
         let hfToken: String? = ProcessInfo.processInfo.environment["HF_TOKEN"]
             ?? Bundle.main.object(forInfoDictionaryKey: "HF_TOKEN") as? String
@@ -1467,7 +1468,8 @@ public class Qwen3ASRModel: Module {
             repoID: repoID,
             requiredExtension: "safetensors",
             hfToken: hfToken,
-            cache: cache
+            cache: cache,
+            progressHandler: progressHandler
         )
 
         // Load config
