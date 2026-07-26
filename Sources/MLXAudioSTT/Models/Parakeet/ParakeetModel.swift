@@ -556,7 +556,7 @@ public extension ParakeetModel {
         return model
     }
 
-    static func fromPretrained(
+    public static func fromPretrained(
         _ modelPath: String,
         cache: HubCache = .default
     ) async throws -> ParakeetModel {
